@@ -15,7 +15,7 @@ def pullRandomNrrds(parent_dir, insp_exp, std_sharp, num_files):
         print(f'Number requested exceeds number of subjects. Setting to maximum: {len(subject_list)} files')
         num_files = len(subject_list)
 
-    while (len(file_count) < num_files) && (len(subject_list) > 0):
+    while (len(file_count) < num_files) and (len(subject_list) > 0):
         subject_index = random.randrange(len(subject_list))
         subject = subject_list.pop(subject_index)
         file_name = glob.glob(os.path.join(subject, '*/*' + insp_exp + std_sharp + '.nrrd'))
