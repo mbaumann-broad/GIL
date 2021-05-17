@@ -1,13 +1,16 @@
-from sklearn.metrics import accuracy_score, roc_curve, auc, roc_auc_score, \
-    precision_recall_fscore_support, matthews_corrcoef
+""" Utility scripts for deep learning pipeline """
 import sys
-import numpy as np
-import pandas as pd
 import itertools
-import matplotlib.pyplot as plt
 import argparse
 import shutil
 import glob
+import subprocess as sp
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from tensorflow.keras import backend as K
+from sklearn.metrics import accuracy_score, roc_curve, auc, roc_auc_score, \
+    precision_recall_fscore_support, matthews_corrcoef
 
 def eprint(args):
     sys.stderr.write(str(args) + "\n")
@@ -25,7 +28,7 @@ def print_history(history, validation):
                 'Epoch {}/{}: accuracy : {:.3f}, loss : {:.3f} '.format(epoch + 1, epochs, history.history['accuracy'][epoch], history.history['loss'][epoch]))
 
 # TRAINING OR TESTING
-def plot_auc(y_labels, pred, parameters_dict = {}, title=''):
+def plot_auc(y_labels, pred, parameters_dict={}, title=''):
     # Scores
     false_positive_rate, recall, thresholds = roc_curve(y_labels, pred)
     roc_auc = auc(false_positive_rate, recall)
@@ -46,7 +49,7 @@ def plot_auc(y_labels, pred, parameters_dict = {}, title=''):
     plt.show()
 
 # TRAINING OR TESTING
-def calculate_metrics(y_labels, prob, pred, average="binary", num_classes = 1):
+def calculate_metrics(y_labels, prob, pred, average="binary", num_classes=1):
     if num_classes == 2:
         roc_auc = roc_auc_score(y_labels, prob[:, 1], multi_class='ovr')
     else:
@@ -74,10 +77,10 @@ def calculate_metrics(y_labels, prob, pred, average="binary", num_classes = 1):
            np.round(mcc, 3)
 
 # TRAINING
-def plot_loss(history, parameters_dict = {}):
+def plot_loss(history, parameters_dict={}):
     loss_train = list(np.log10(history.history['loss']))
     loss_val = list(np.log10(history.history['val_loss']))
-    epochs_initial = len(loss_val_initial)
+    epochs_initial = len(loss_val)
 
     epochs = range(1, epochs_initial + 1)
     min_loss = min(loss_train + loss_val)
@@ -97,7 +100,7 @@ def plot_loss(history, parameters_dict = {}):
     plt.show()
 
 # TRAINING OR TESTING
-def plot_predictions(validation_labels, pred, parameters_dict = {}, title=''):
+def plot_predictions(validation_labels, pred, parameters_dict={}, title=''):
     num_samples_to_show = np.min([len(pred), 100])
     plt.figure(figsize=(30, 10))
     plt.plot(range(num_samples_to_show), pred[:num_samples_to_show], 'ys', label='Predicted_value')
@@ -113,7 +116,7 @@ def plot_predictions(validation_labels, pred, parameters_dict = {}, title=''):
     plt.show()
 
 # TRAINING OR TESTING
-def plot_confusion_matrix(cm, class_names, parameters_dict = {}, title=''):
+def plot_confusion_matrix(cm, class_names, parameters_dict={}, title=''):
     """
     Returns a matplotlib figure containing the plotted confusion matrix.
 
@@ -122,7 +125,7 @@ def plot_confusion_matrix(cm, class_names, parameters_dict = {}, title=''):
     class_names (array, shape = [n]): String names of the integer classes
     """
     figure = plt.figure(figsize=(8, 8))
-    plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    plt.imshow(cm, interpolation='nearest', cmap=plt.get_cmap('Blues'))
     plt.title(title.replace('_', ' '))
     plt.colorbar()
     tick_marks = np.arange(len(class_names))
@@ -160,3 +163,46 @@ def plot_confusion_matrix(cm, class_names, parameters_dict = {}, title=''):
     # Return mean value - to discuss
     return np.round(100 * specificity.mean(), 3), \
            np.round(100 * fallout.mean(), 3)
+
+def get_gpu_memory():
+    _output_to_list = lambda x: x.decode('ascii').split('\n')[:-1]
+
+    # ACCEPTABLE_AVAILABLE_MEMORY = 1024
+    command = "nvidia-smi --query-gpu=memory.free --format=csv"
+    memory_free_info = _output_to_list(sp.check_output(command.split()))[1:]
+    memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
+    memory_sum = sum(memory_free_values)
+
+    return memory_sum
+
+
+def get_model_memory_usage(batch_size, model):
+    shapes_mem_count = 0
+    internal_model_mem_count = 0
+    for layer in model.layers:
+        layer_type = layer.__class__.__name__
+        if layer_type == 'Model':
+            internal_model_mem_count += get_model_memory_usage(batch_size, layer)
+        single_layer_mem = 1
+        out_shape = layer.output_shape
+        if type(out_shape) is list:
+            out_shape = out_shape[0]
+        for shape in out_shape:
+            if shape is None:
+                continue
+            single_layer_mem *= shape
+        shapes_mem_count += single_layer_mem
+
+    trainable_count = np.sum([K.count_params(p) for p in model.trainable_weights])
+    non_trainable_count = np.sum([K.count_params(p) for p in model.non_trainable_weights])
+
+    number_size = 4.0
+    if K.floatx() == 'float16':
+        number_size = 2.0
+    if K.floatx() == 'float64':
+        number_size = 8.0
+
+    total_memory = number_size * (batch_size * shapes_mem_count + trainable_count + non_trainable_count)
+    gbytes = np.round(total_memory / (1024.0 ** 3), 3) + internal_model_mem_count
+
+    return gbytes
