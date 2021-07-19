@@ -4,4 +4,4 @@ seaborn
 sklearn
 SimpleITK
 tensorflow==2.4
-
+tqdm

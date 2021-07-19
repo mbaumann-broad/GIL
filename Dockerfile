@@ -22,7 +22,7 @@ RUN export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64
 #RUN apt-get update && apt-get install -y nvidia-smi
 RUN python3 -m pip install --upgrade pip && python3 -m pip install pandas numpy sklearn
 RUN python3 -m pip install --upgrade pip && python3 -m pip install matplotlib seaborn
-RUN python3 -m pip install --upgrade pip && python3 -m pip install SimpleITK
+RUN python3 -m pip install --upgrade pip && python3 -m pip install SimpleITK tqdm
 
 WORKDIR /opt
 RUN git  clone https://github.com/mbaumann-broad/GIL.git
